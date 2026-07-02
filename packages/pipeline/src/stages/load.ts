@@ -9,6 +9,9 @@ import { insertRows, type SqlValue } from '../util/sql.js';
 import { readJson } from '../util/fs.js';
 import { log } from '../util/log.js';
 
+/** Number of films to include in the small committed test fixture. */
+const FIXTURE_MOVIES = 24;
+
 function moviesSql(movies: MovieRecord[]): string {
   const rows: SqlValue[][] = movies.map((m) => [
     m.id,
@@ -110,17 +113,34 @@ export async function load(): Promise<void> {
     roundsSql(pool);
   await writeFile(resolve(DATA_DIR, 'seed.sql'), full, 'utf8');
 
-  // Lean fixture for local dev, CI, and e2e: everything the API needs at runtime
-  // (rounds are pre-generated, so quote_neighbors is not required to play).
-  const fixture =
-    header +
-    genresSql(genres) +
-    moviesSql(usedMovies) +
-    movieGenresSql(usedMovies) +
-    quotesSql(quotes) +
-    roundsSql(pool);
-  await mkdir(FIXTURES_DIR, { recursive: true });
-  await writeFile(resolve(FIXTURES_DIR, 'seed.sql'), fixture, 'utf8');
+  // The committed test fixture is a small, self-contained subset for local dev,
+  // CI, and e2e. Only (re)write it when explicitly asked, so a full-corpus run
+  // does not bloat the repo. The full data/seed.sql above is what seeds prod.
+  if (process.env.WRITE_FIXTURE) {
+    const fixtureMovies = usedMovies.slice(0, FIXTURE_MOVIES);
+    const fixtureMovieIds = new Set(fixtureMovies.map((m) => m.id));
+    const fixtureQuotes = quotes.filter((q) => fixtureMovieIds.has(q.movieId));
+    const fixtureQuoteIds = new Set(fixtureQuotes.map((q) => q.id));
+    // Keep only rounds that are fully playable within the subset.
+    const fixtureRounds = pool.filter(
+      (r) =>
+        fixtureMovieIds.has(r.movieId) &&
+        fixtureQuoteIds.has(r.answerQuoteId) &&
+        r.decoyPool.filter((d) => fixtureQuoteIds.has(d.quoteId)).length >= 2,
+    );
+    const fixture =
+      header +
+      genresSql(genres) +
+      moviesSql(fixtureMovies) +
+      movieGenresSql(fixtureMovies) +
+      quotesSql(fixtureQuotes) +
+      roundsSql(fixtureRounds);
+    await mkdir(FIXTURES_DIR, { recursive: true });
+    await writeFile(resolve(FIXTURES_DIR, 'seed.sql'), fixture, 'utf8');
+    log.info(
+      `wrote fixture: ${fixtureMovies.length} movies, ${fixtureQuotes.length} quotes, ${fixtureRounds.length} rounds`,
+    );
+  }
 
   log.info(
     `load complete: ${usedMovies.length} movies, ${quotes.length} quotes, ${pool.length} rounds`,
