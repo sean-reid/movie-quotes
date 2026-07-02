@@ -1,7 +1,7 @@
-import { env } from '$env/dynamic/public';
 import type { DifficultyBand, GuessResult, RoundView } from '@movie-quotes/shared';
 
-const API_BASE = env.PUBLIC_API_BASE ?? 'http://localhost:8787';
+// Baked in at build time. Defaults to the local API worker for development.
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8787';
 
 export interface Meta {
   genres: { id: number; name: string }[];

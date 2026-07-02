@@ -11,14 +11,13 @@
     // Public TMDb image CDN base for poster URLs (safe to expose).
     "TMDB_IMAGE_BASE": "https://image.tmdb.org/t/p/w500",
     // Comma-separated list of allowed browser origins for CORS.
-    "ALLOWED_ORIGINS": "http://localhost:5173",
+    "ALLOWED_ORIGINS": "http://localhost:5173,https://movie-quotes.pages.dev,https://quotes.dwainosaur.com",
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "movie-quotes",
-      // Replace with the real id after `wrangler d1 create movie-quotes`.
-      "database_id": "REPLACE_WITH_D1_ID",
+      "database_id": "90fdd683-1525-451a-89ac-93946f9a190e",
     },
   ],
   "r2_buckets": [
