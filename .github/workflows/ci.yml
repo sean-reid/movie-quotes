@@ -68,6 +68,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          VITE_API_BASE: https://movie-quotes-api.seanreid.workers.dev
 
       - name: Deploy API worker
         run: pnpm --filter @movie-quotes/api exec wrangler deploy
