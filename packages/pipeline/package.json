@@ -11,9 +11,14 @@
     "discover": "node --env-file=../../.env --import tsx src/stages/discover.ts",
     "fetch-scripts": "node --env-file=../../.env --import tsx src/stages/fetch-scripts.ts",
     "parse": "node --import tsx src/stages/parse.ts",
-    "filter": "node --import tsx src/stages/filter.ts"
+    "filter": "node --import tsx src/stages/filter.ts",
+    "embed": "node --import tsx src/stages/embed.ts",
+    "neighbors": "node --import tsx src/stages/neighbors.ts",
+    "rounds": "node --import tsx src/stages/rounds.ts",
+    "load": "node --import tsx src/stages/load.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@movie-quotes/shared": "workspace:*"
   },
   "devDependencies": {

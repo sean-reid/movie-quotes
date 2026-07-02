@@ -23,7 +23,9 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "workerd",
-      "sharp"
+      "sharp",
+      "onnxruntime-node",
+      "protobufjs"
     ]
   },
   "devDependencies": {

@@ -9,7 +9,11 @@
     "deploy": "wrangler deploy",
     "check": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "db:reset": "wrangler d1 execute movie-quotes --local --file=schema.sql --yes",
+    "db:seed": "wrangler d1 execute movie-quotes --local --file=../../packages/pipeline/fixtures/seed.sql --yes",
+    "db:reset:remote": "wrangler d1 execute movie-quotes --remote --file=schema.sql --yes",
+    "db:seed:remote": "wrangler d1 execute movie-quotes --remote --file=../../packages/pipeline/fixtures/seed.sql --yes"
   },
   "dependencies": {
     "@movie-quotes/shared": "workspace:*",

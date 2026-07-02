@@ -38,6 +38,31 @@ export const TMDB_REQUEST_INTERVAL_MS = 300;
 export const TMDB_MAX_RETRIES = 6;
 export const TMDB_BACKOFF_BASE_MS = 1000;
 
+/** Local sentence-embedding model (downloaded once, then cached and offline). */
+export const EMBED_MODEL = 'Xenova/bge-small-en-v1.5';
+
+/** How many nearest semantic neighbors to precompute per quote. */
+export const NEIGHBORS_TOP_N = 20;
+
+/** How many ranked decoys to keep per round, so answer size can grow later. */
+export const DECOY_POOL_SIZE = 8;
+
+/**
+ * Decoy hardness blends how similar the line reads (semantic) with how similar
+ * the source film feels (genre, era, theme). A line that is both on-topic and
+ * from an adjacent film is the hardest to rule out.
+ */
+export const DECOY_SEMANTIC_WEIGHT = 0.7;
+export const DECOY_MOVIE_WEIGHT = 0.3;
+
+/** Weights inside the movie-similarity score (normalized by their sum). */
+export const MOVIE_SIM_GENRE_WEIGHT = 0.5;
+export const MOVIE_SIM_DECADE_WEIGHT = 0.2;
+export const MOVIE_SIM_KEYWORD_WEIGHT = 0.3;
+
+/** Two films this many years apart score zero on decade proximity. */
+export const DECADE_SPAN_YEARS = 40;
+
 export function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
