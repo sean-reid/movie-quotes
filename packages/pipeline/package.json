@@ -7,7 +7,11 @@
     "check": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "discover": "node --env-file=../../.env --import tsx src/stages/discover.ts",
+    "fetch-scripts": "node --env-file=../../.env --import tsx src/stages/fetch-scripts.ts",
+    "parse": "node --import tsx src/stages/parse.ts",
+    "filter": "node --import tsx src/stages/filter.ts"
   },
   "dependencies": {
     "@movie-quotes/shared": "workspace:*"

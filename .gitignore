@@ -20,9 +20,8 @@ test-results/
 !.env.example
 .dev.vars
 
-# pipeline working data
-packages/pipeline/data/cache/
-packages/pipeline/data/scripts/
+# pipeline working data (fixtures under packages/pipeline/fixtures are committed)
+packages/pipeline/data/
 
 # editor and OS
 .DS_Store
