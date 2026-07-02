@@ -15,6 +15,7 @@
     "@movie-quotes/shared": "workspace:*"
   },
   "devDependencies": {
+    "@fontsource-variable/fraunces": "^5.2.9",
     "@playwright/test": "^1.49.1",
     "@sveltejs/adapter-cloudflare": "^4.9.0",
     "@sveltejs/kit": "^2.15.1",

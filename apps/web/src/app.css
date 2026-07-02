@@ -4,7 +4,7 @@
  * a data-theme attribute on <html>.
  */
 :root {
-  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-serif: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   --space-1: 0.5rem;

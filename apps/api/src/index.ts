@@ -89,7 +89,7 @@ app.get('/api/round', async (c) => {
   const view: RoundView = {
     roundId: round.id,
     band: round.band,
-    film: { title: movie.title, year: movie.year },
+    film: { id: movie.id, title: movie.title, year: movie.year },
     choices,
   };
   return c.json(view);

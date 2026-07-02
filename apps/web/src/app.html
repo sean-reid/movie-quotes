@@ -8,6 +8,13 @@
       name="description"
       content="A game of matching famous lines to the films they came from."
     />
+    <script>
+      // Apply a saved theme before paint to avoid a flash. System default needs no attribute.
+      try {
+        var t = localStorage.getItem('movie-quotes:theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

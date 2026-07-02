@@ -56,6 +56,7 @@ export interface RoundView {
   roundId: number;
   band: DifficultyBand;
   film: {
+    id: number;
     title: string;
     year: number;
   };
