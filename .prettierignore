@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.svelte-kit
+.turbo
+.wrangler
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml

@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.svelte-kit/
+.turbo/
+.wrangler/
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# env and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# pipeline working data
+packages/pipeline/data/cache/
+packages/pipeline/data/scripts/
+
+# editor and OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# AI tooling (never commit)
+.claude/
+CLAUDE.md

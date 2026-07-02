@@ -1,0 +1,104 @@
+/*
+ * Design tokens. Editorial direction: restrained palette, one accent, generous
+ * whitespace. System-adaptive light and dark; the manual override is applied via
+ * a data-theme attribute on <html>.
+ */
+:root {
+  --font-serif: Georgia, 'Times New Roman', serif;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2.5rem;
+  --space-5: 4rem;
+
+  --radius: 10px;
+  --measure: 34rem;
+
+  --ink: #1a1714;
+  --ink-soft: #57514a;
+  --paper: #f7f4ef;
+  --surface: #ffffff;
+  --line: #e2dcd3;
+  --accent: #b3452f;
+  --accent-ink: #ffffff;
+  --good: #2f7d4f;
+  --bad: #b3452f;
+}
+
+:root[data-theme='dark'],
+html:not([data-theme='light']) {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme='light']) {
+    color-scheme: dark;
+    --ink: #ece7df;
+    --ink-soft: #a49c90;
+    --paper: #141210;
+    --surface: #1d1a17;
+    --line: #302b26;
+    --accent: #e0765c;
+    --accent-ink: #141210;
+    --good: #6fbf8f;
+    --bad: #e0765c;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #ece7df;
+  --ink-soft: #a49c90;
+  --paper: #141210;
+  --surface: #1d1a17;
+  --line: #302b26;
+  --accent: #e0765c;
+  --accent-ink: #141210;
+  --good: #6fbf8f;
+  --bad: #e0765c;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

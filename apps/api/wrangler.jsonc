@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "movie-quotes-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "vars": {
+    // Public TMDb image CDN base for poster URLs (safe to expose).
+    "TMDB_IMAGE_BASE": "https://image.tmdb.org/t/p/w500",
+    // Comma-separated list of allowed browser origins for CORS.
+    "ALLOWED_ORIGINS": "http://localhost:5173",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "movie-quotes",
+      // Replace with the real id after `wrangler d1 create movie-quotes`.
+      "database_id": "REPLACE_WITH_D1_ID",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "SCRIPTS",
+      "bucket_name": "movie-quotes-scripts",
+    },
+  ],
+}
