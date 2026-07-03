@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
 import {
-  bandForSimilarity,
   DEFAULT_CHOICE_COUNT,
   isNearDuplicate,
   type DecoyCandidate,
@@ -91,14 +90,24 @@ export async function rounds(): Promise<void> {
       movieId: answer.movieId,
       decade: answerMovie.decade,
       primaryGenreId: answerMovie.genreIds[0] ?? 0,
-      band: bandForSimilarity(avgSimilarity),
+      band: 'easy', // assigned by percentile below
       avgSimilarity,
       decoyPool,
     });
   }
 
+  // Assign difficulty by percentile (terciles of similarity) rather than absolute
+  // thresholds, so each band is well populated and the adaptive ramp works.
+  const sorted = pool.map((r) => r.avgSimilarity).sort((a, b) => a - b);
+  const p33 = sorted[Math.floor(sorted.length / 3)] ?? 0;
+  const p67 = sorted[Math.floor((2 * sorted.length) / 3)] ?? 1;
+  for (const r of pool) {
+    r.band = r.avgSimilarity <= p33 ? 'easy' : r.avgSimilarity <= p67 ? 'medium' : 'hard';
+  }
+  log.info(`band thresholds: easy<=${p33.toFixed(3)} medium<=${p67.toFixed(3)}`);
+
   // Cap the pool (even sample to keep the era/genre/difficulty spread) so the D1
-  // seed stays well under the free-tier write limit.
+  // seed stays lean.
   let finalPool = pool;
   if (pool.length > MAX_ROUNDS) {
     const step = pool.length / MAX_ROUNDS;

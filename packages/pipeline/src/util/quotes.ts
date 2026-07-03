@@ -59,7 +59,13 @@ export function isGoodQuote(text: string): boolean {
   if (words.length < MIN_QUOTE_WORDS) return false;
   const letters = (text.match(/[a-zA-Z]/g) ?? []).length;
   if (letters < text.length * 0.6) return false;
-  if (text === text.toUpperCase()) return false;
+  // Reject credits/cast lists and shouting: more uppercase than lowercase letters.
+  const upper = (text.match(/[A-Z]/g) ?? []).length;
+  const lower = (text.match(/[a-z]/g) ?? []).length;
+  if (upper > lower) return false;
+  // Reject repeated lyrics/chants: too few unique words.
+  const lowerWords = text.toLowerCase().split(/\s+/);
+  if (lowerWords.length >= 6 && new Set(lowerWords).size / lowerWords.length < 0.5) return false;
   // Must start with a capital letter: drops mid-sentence fragments and lyric bleed.
   if (!/^[A-Z]/.test(text)) return false;
   if (!isLikelyDialogue(text)) return false;
