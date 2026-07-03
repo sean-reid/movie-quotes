@@ -41,7 +41,9 @@ function parseIntList(value: string | undefined): number[] {
 
 /** Build the client-facing view of a round (answer hidden, choices shuffled deterministically). */
 async function assembleView(env: Env, round: RoundRow): Promise<RoundView | null> {
-  const decoyIds = round.decoyPool.slice(0, DEFAULT_CHOICE_COUNT - 1).map((d) => d.quoteId);
+  // Pass the whole ranked pool so selection can enforce distinct films even if
+  // the top candidates share a movie.
+  const decoyIds = round.decoyPool.map((d) => d.quoteId);
   const quotes = await getQuotes(env.DB, [round.answerQuoteId, ...decoyIds]);
   const answer = quotes.get(round.answerQuoteId);
   const movie = await getMovie(env.DB, round.movieId);
@@ -50,11 +52,11 @@ async function assembleView(env: Env, round: RoundRow): Promise<RoundView | null
   const decoys = decoyIds
     .map((id) => quotes.get(id))
     .filter((q): q is NonNullable<typeof q> => q !== undefined)
-    .map((q) => ({ quoteId: q.id, text: q.text }));
+    .map((q) => ({ quoteId: q.id, text: q.text, movieId: q.movieId }));
 
   try {
     const assembled = selectChoices({
-      answer: { quoteId: answer.id, text: answer.text },
+      answer: { quoteId: answer.id, text: answer.text, movieId: answer.movieId },
       decoys,
       choiceCount: DEFAULT_CHOICE_COUNT,
       rng: mulberry32(round.id),

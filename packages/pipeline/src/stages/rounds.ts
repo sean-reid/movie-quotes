@@ -50,20 +50,31 @@ export async function rounds(): Promise<void> {
         const hardness =
           DECOY_SEMANTIC_WEIGHT * c.score +
           DECOY_MOVIE_WEIGHT * movieSimilarity(answerMovie, decoyMovie);
-        return { quoteId: decoyQuote.id, text: decoyQuote.text, score: hardness };
+        return {
+          quoteId: decoyQuote.id,
+          text: decoyQuote.text,
+          movieId: decoyQuote.movieId,
+          score: hardness,
+        };
       })
-      .filter((x): x is { quoteId: number; text: string; score: number } => x !== null)
+      .filter(
+        (x): x is { quoteId: number; text: string; movieId: number; score: number } => x !== null,
+      )
       .sort((a, b) => b.score - a.score);
 
-    // Keep a ranked, near-dup-guarded decoy pool (larger than we show today).
+    // Ranked, near-dup-guarded, one-decoy-per-film pool so any shown subset has
+    // the answer and every decoy from a distinct movie.
     const decoyPool: DecoyCandidate[] = [];
     const kept: string[] = [];
+    const usedFilms = new Set<number>([answer.movieId]);
     for (const candidate of ranked) {
       if (decoyPool.length === DECOY_POOL_SIZE) break;
+      if (usedFilms.has(candidate.movieId)) continue;
       if (isNearDuplicate(candidate.text, answer.text)) continue;
       if (kept.some((t) => isNearDuplicate(t, candidate.text))) continue;
       decoyPool.push({ quoteId: candidate.quoteId, score: candidate.score });
       kept.push(candidate.text);
+      usedFilms.add(candidate.movieId);
     }
 
     if (decoyPool.length < DECOYS_NEEDED) {

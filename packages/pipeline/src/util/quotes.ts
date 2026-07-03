@@ -4,10 +4,21 @@ export const MIN_QUOTE_LEN = 25;
 export const MAX_QUOTE_LEN = 180;
 export const MIN_QUOTE_WORDS = 4;
 
+// First/second person pronouns and contractions are strong signals of spoken
+// dialogue; third-person scene description ("He walks to the door") has none.
+const DIALOGUE_SIGNAL =
+  /\b(i|i'm|i'll|i've|i'd|you|you're|you'll|you've|you'd|we|we're|we'll|we've|me|my|your|us|our|mine|yours|let's)\b/i;
+const CONTRACTION = /\b\w+'(t|s|re|ll|ve|d|m)\b/i;
+
+/** True when a line reads like something a character says, not narration. */
+export function isLikelyDialogue(text: string): boolean {
+  return DIALOGUE_SIGNAL.test(text) || CONTRACTION.test(text) || /[?!]/.test(text);
+}
+
 /** Split a dialogue block into sentence-sized candidate lines. */
 export function splitSentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?]["'”’]?)\s+/)
     .map((s) =>
       s
         .trim()
@@ -29,6 +40,7 @@ export function isGoodQuote(text: string): boolean {
   const letters = (text.match(/[a-zA-Z]/g) ?? []).length;
   if (letters < text.length * 0.6) return false;
   if (text === text.toUpperCase()) return false;
+  if (!isLikelyDialogue(text)) return false;
   return true;
 }
 
