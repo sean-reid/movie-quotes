@@ -71,9 +71,12 @@ export async function discover(): Promise<void> {
   }
 
   log.info(`fetching thematic keywords for ${movies.length} films`);
-  for (const movie of movies) {
-    movie.keywordIds = await fetchKeywords(movie.id);
-  }
+  // Concurrency is bounded inside the TMDb client.
+  await Promise.all(
+    movies.map(async (movie) => {
+      movie.keywordIds = await fetchKeywords(movie.id);
+    }),
+  );
 
   await writeJson(resolve(DATA_DIR, 'movies.json'), movies);
   log.info(

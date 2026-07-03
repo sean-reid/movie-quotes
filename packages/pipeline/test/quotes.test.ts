@@ -29,6 +29,10 @@ describe('isGoodQuote', () => {
     expect(isGoodQuote('You bet.')).toBe(false); // too short
     expect(isGoodQuote('GET OUT OF MY WAY RIGHT NOW YOU FOOL')).toBe(false); // all caps
   });
+
+  it('rejects mid-sentence fragments that start lowercase', () => {
+    expect(isGoodQuote('the very car that brought our relationship to an end')).toBe(false);
+  });
 });
 
 describe('splitSentences', () => {

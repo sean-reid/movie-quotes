@@ -16,10 +16,12 @@ export interface GenreRecord {
   name: string;
 }
 
-/** A film that has a located, downloaded, and stored screenplay. */
+/** A film that has a located, downloaded, and stored script. */
 export interface ScriptRecord {
   movieId: number;
   source: string;
+  /** How to parse the stored text: full screenplay vs dialogue-only transcript. */
+  kind: 'screenplay' | 'transcript';
   r2Key: string;
   chars: number;
 }

@@ -19,22 +19,20 @@ export const MIN_RATING = 6.5;
  * (about 17%) so the corpus is not all recent releases.
  */
 export const DECADE_QUOTAS: Record<number, number> = {
-  1950: 40,
-  1960: 55,
-  1970: 80,
-  1980: 130,
-  1990: 175,
-  2000: 185,
-  2010: 210,
-  2020: 125,
+  1950: 200,
+  1960: 280,
+  1970: 400,
+  1980: 650,
+  1990: 850,
+  2000: 900,
+  2010: 1000,
+  2020: 720,
 };
 
 /**
- * Politeness toward the TMDb API. We stay well under their limits: requests are
- * spaced out, responses are cached on disk so re-runs do not re-hit the API, and
- * throttling responses trigger a backoff that honors Retry-After.
+ * Politeness toward the TMDb API: bounded concurrency, responses cached on disk
+ * so re-runs do not re-hit the API, and backoff that honors Retry-After.
  */
-export const TMDB_REQUEST_INTERVAL_MS = 300;
 export const TMDB_MAX_RETRIES = 6;
 export const TMDB_BACKOFF_BASE_MS = 1000;
 
@@ -44,14 +42,22 @@ export const EMBED_MODEL = 'Xenova/bge-small-en-v1.5';
 /** How many nearest semantic neighbors to precompute per quote. */
 export const NEIGHBORS_TOP_N = 20;
 
+/**
+ * Neighbor search is restricted to quotes from each film's most-similar films.
+ * This makes the O(N^2) search tractable at scale and biases decoys toward
+ * adjacent-world films (a quality win, not just a speedup).
+ */
+export const SIMILAR_FILMS = 60;
+
 /** How many ranked decoys to keep per round, so answer size can grow later. */
 export const DECOY_POOL_SIZE = 8;
 
 /**
- * Cap on the pre-generated round pool. Keeps the D1 seed well under the free-tier
- * daily write limit while still offering far more variety than anyone will play.
+ * Cap on the pre-generated round pool. Set high (roughly one round per quote) so
+ * exact-repeat rounds are very unlikely across games. Writes are cheap on the
+ * Workers Paid plan; runtime selection uses a random-id lookup, not a full scan.
  */
-export const MAX_ROUNDS = 20000;
+export const MAX_ROUNDS = 250000;
 
 /**
  * Decoy hardness blends how similar the line reads (semantic) with how similar

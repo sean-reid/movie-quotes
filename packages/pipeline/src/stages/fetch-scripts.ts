@@ -2,132 +2,124 @@ import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DATA_DIR, SCRIPTS_DIR } from '../config.js';
 import type { MovieRecord, ScriptRecord } from '../types.js';
-import { politeFetchText } from '../util/http.js';
-import { extractPre, findScriptLink, htmlToText } from '../util/html.js';
-import { titleKey } from '../util/title.js';
+import { imsdbSource, springfieldSource, type Source } from '../sources.js';
 import { readJson, writeJson } from '../util/fs.js';
 import { log } from '../util/log.js';
 
-const IMSDB = 'https://imsdb.com';
-const INDEX_URL = `${IMSDB}/all-scripts.html`;
-const MIN_SCRIPT_CHARS = 3000;
-
-interface IndexEntry {
-  key: string;
-  moviePageUrl: string;
-}
-
-/** Build a lookup from the IMSDb master list of scripts (one polite fetch). */
-async function loadIndex(): Promise<Map<string, IndexEntry>> {
-  const html = await politeFetchText(INDEX_URL);
-  if (!html) throw new Error('could not load the IMSDb script index');
-
-  const index = new Map<string, IndexEntry>();
-  const anchor = /<a href="(\/Movie Scripts\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
-  for (const match of html.matchAll(anchor)) {
-    const href = match[1]!;
-    const title = match[2]!.trim();
-    const key = titleKey(title);
-    if (key && !index.has(key)) {
-      index.set(key, { key, moviePageUrl: IMSDB + encodeURI(href) });
-    }
-  }
-  log.info(`imsdb index: ${index.size} scripts`);
-  return index;
-}
-
-function lookup(index: Map<string, IndexEntry>, title: string): IndexEntry | null {
-  const key = titleKey(title);
-  const exact = index.get(key);
-  if (exact) return exact;
-  // Fallback: an index title that starts with ours (e.g. "Star Wars: A New Hope").
-  for (const entry of index.values()) {
-    if (entry.key.startsWith(key) && key.length >= 5) return entry;
-  }
-  return null;
-}
-
-async function fetchScript(entry: IndexEntry): Promise<string | null> {
-  const moviePage = await politeFetchText(entry.moviePageUrl);
-  if (!moviePage) return null;
-  const scriptHref = findScriptLink(moviePage);
-  if (!scriptHref) return null;
-
-  const scriptPage = await politeFetchText(IMSDB + encodeURI(scriptHref));
-  if (!scriptPage) return null;
-
-  const pre = extractPre(scriptPage);
-  if (!pre) return null;
-  const text = htmlToText(pre).trim();
-  return text.length >= MIN_SCRIPT_CHARS ? text : null;
-}
-
 /**
- * Resume support: the saved script files on disk are the source of truth, so a
- * run interrupted before scripts.json was written still resumes cleanly.
+ * Resume support: prefer scripts.json (records source and kind); fall back to
+ * scanning saved files. Old records without a kind are IMSDb screenplays.
  */
 async function loadProgress(): Promise<ScriptRecord[]> {
-  let files: string[] = [];
   try {
-    files = await readdir(SCRIPTS_DIR);
+    const prior = await readJson<ScriptRecord[]>(resolve(DATA_DIR, 'scripts.json'));
+    const kept: ScriptRecord[] = [];
+    for (const r of prior) {
+      try {
+        await stat(resolve(SCRIPTS_DIR, `${r.movieId}.txt`));
+        kept.push({ ...r, kind: r.kind ?? 'screenplay' });
+      } catch {
+        // file gone; will be re-fetched
+      }
+    }
+    if (kept.length) return kept;
+  } catch {
+    // no scripts.json yet
+  }
+  try {
+    const files = await readdir(SCRIPTS_DIR);
+    const recs: ScriptRecord[] = [];
+    for (const f of files) {
+      if (!f.endsWith('.txt')) continue;
+      const id = Number(f.replace('.txt', ''));
+      if (!Number.isInteger(id)) continue;
+      const { size } = await stat(resolve(SCRIPTS_DIR, f));
+      recs.push({
+        movieId: id,
+        source: 'imsdb',
+        kind: 'screenplay',
+        r2Key: `raw/${id}.txt`,
+        chars: size,
+      });
+    }
+    return recs;
   } catch {
     return [];
   }
-  const records: ScriptRecord[] = [];
-  for (const file of files) {
-    if (!file.endsWith('.txt')) continue;
-    const movieId = Number(file.replace('.txt', ''));
-    if (!Number.isInteger(movieId)) continue;
-    const { size } = await stat(resolve(SCRIPTS_DIR, file));
-    records.push({ movieId, source: 'imsdb', r2Key: `raw/${movieId}.txt`, chars: size });
-  }
-  return records;
 }
 
 export async function fetchScripts(): Promise<void> {
-  log.step('fetch-scripts: locate and download screenplays');
+  log.step('fetch-scripts: locate and download scripts');
   const movies = await readJson<MovieRecord[]>(resolve(DATA_DIR, 'movies.json'));
   await mkdir(SCRIPTS_DIR, { recursive: true });
 
-  // Resume: keep films already downloaded, skip them, and re-attempt the rest.
-  // The HTTP cache means re-attempts never re-download pages we already fetched.
   const scripts = await loadProgress();
-  const done = new Set(scripts.map((s) => s.movieId));
-  if (done.size > 0) log.info(`resuming: ${done.size} scripts already saved`);
+  // "attempted" tracks every film we have tried (found or missed) so batches
+  // advance past misses instead of retrying the same ones.
+  let attempted: number[] = [];
+  try {
+    attempted = await readJson<number[]>(resolve(DATA_DIR, 'attempted.json'));
+  } catch {
+    attempted = scripts.map((s) => s.movieId);
+  }
+  const done = new Set([...attempted, ...scripts.map((s) => s.movieId)]);
+  if (done.size > 0) log.info(`resuming: ${scripts.length} found, ${done.size} attempted`);
 
-  const index = await loadIndex();
+  // Springfield first: dialogue-only transcripts (cleaner) with far wider coverage;
+  // IMSDb screenplays as a fallback for films Springfield lacks.
+  const sources: Source[] = [springfieldSource(), imsdbSource()];
+  for (const source of sources) await source.init();
+
+  // Optional per-run batch size (this pipeline is resumable), default: everything.
+  const batch = process.env.BATCH ? Number(process.env.BATCH) : Infinity;
+  const pending = movies.filter((m) => !done.has(m.id)).slice(0, batch);
+  const CHUNK = 8;
   let misses = 0;
 
-  for (const movie of movies) {
-    if (done.has(movie.id)) continue;
+  for (let start = 0; start < pending.length; start += CHUNK) {
+    const chunk = pending.slice(start, start + CHUNK);
+    // Films run concurrently; the HTTP client bounds actual per-host concurrency.
+    const found = await Promise.all(
+      chunk.map(async (movie) => {
+        for (const source of sources) {
+          const result = await source.fetch(movie);
+          if (result) return { movie, result };
+        }
+        return { movie, result: null };
+      }),
+    );
 
-    const entry = lookup(index, movie.title);
-    if (!entry) {
-      misses++;
-      log.warn(`no script listed for ${movie.title} (${movie.year})`);
-      continue;
+    for (const { movie, result } of found) {
+      attempted.push(movie.id);
+      if (!result) {
+        misses++;
+        continue;
+      }
+      await writeFile(resolve(SCRIPTS_DIR, `${movie.id}.txt`), result.text, 'utf8');
+      scripts.push({
+        movieId: movie.id,
+        source: result.source,
+        kind: result.kind,
+        r2Key: `raw/${movie.id}.txt`,
+        chars: result.text.length,
+      });
     }
-    const text = await fetchScript(entry);
-    if (!text) {
-      misses++;
-      log.warn(`could not extract script for ${movie.title} (${movie.year})`);
-      continue;
-    }
-    await writeFile(resolve(SCRIPTS_DIR, `${movie.id}.txt`), text, 'utf8');
-    scripts.push({
-      movieId: movie.id,
-      source: 'imsdb',
-      r2Key: `raw/${movie.id}.txt`,
-      chars: text.length,
-    });
-    done.add(movie.id);
-    // Persist after each save so an interrupted run resumes cleanly.
+    // Persist progress once per chunk so an interrupted run resumes cleanly.
     await writeJson(resolve(DATA_DIR, 'scripts.json'), scripts);
-    log.info(`saved ${movie.title} (${text.length} chars, ${scripts.length} total)`);
+    await writeJson(resolve(DATA_DIR, 'attempted.json'), attempted);
+    log.info(
+      `fetch-scripts ${Math.min(start + CHUNK, pending.length)}/${pending.length} (${scripts.length} found)`,
+    );
   }
 
   await writeJson(resolve(DATA_DIR, 'scripts.json'), scripts);
-  log.info(`fetch-scripts complete: ${scripts.length} scripts, ${misses} misses`);
+  const bySource = scripts.reduce<Record<string, number>>((acc, s) => {
+    acc[s.source] = (acc[s.source] ?? 0) + 1;
+    return acc;
+  }, {});
+  log.info(
+    `fetch-scripts complete: ${scripts.length} scripts (${JSON.stringify(bySource)}), ${misses} misses`,
+  );
 }
 
 fetchScripts().catch((error) => {

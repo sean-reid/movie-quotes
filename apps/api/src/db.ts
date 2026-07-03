@@ -44,10 +44,9 @@ export async function selectRandomRound(
   return queryRandomRound(db, { ...filters, band: undefined });
 }
 
-async function queryRandomRound(db: D1Database, filters: RoundFilters): Promise<RoundRow | null> {
-  const clauses: string[] = ['1 = 1'];
+function filterClauses(filters: RoundFilters): { sql: string; binds: unknown[] } {
+  const clauses: string[] = [];
   const binds: unknown[] = [];
-
   if (filters.band) {
     clauses.push('band = ?');
     binds.push(filters.band);
@@ -68,20 +67,33 @@ async function queryRandomRound(db: D1Database, filters: RoundFilters): Promise<
     clauses.push(`movie_id NOT IN (${placeholders(filters.excludeMovies.length)})`);
     binds.push(...filters.excludeMovies);
   }
+  return { sql: clauses.length ? clauses.join(' AND ') : '1 = 1', binds };
+}
 
-  const sql = `SELECT id, answer_quote_id, movie_id, band, decoy_pool
-    FROM rounds WHERE ${clauses.join(' AND ')} ORDER BY RANDOM() LIMIT 1`;
+/**
+ * Pick a random matching round via a random-id seek instead of ORDER BY RANDOM(),
+ * so it stays an O(log n) index lookup even with a very large rounds table. Picks
+ * a random id, takes the next matching row at or after it, and wraps to the start
+ * if the random point overshoots.
+ */
+async function queryRandomRound(db: D1Database, filters: RoundFilters): Promise<RoundRow | null> {
+  const { sql: where, binds } = filterClauses(filters);
+  const select = 'SELECT id, answer_quote_id, movie_id, band, decoy_pool FROM rounds';
+  const pivot = 'id >= (ABS(RANDOM()) % (SELECT MAX(id) + 1 FROM rounds))';
 
-  const row = await db
-    .prepare(sql)
+  const primary = `${select} WHERE ${pivot} AND ${where} ORDER BY id LIMIT 1`;
+  let row = await db
+    .prepare(primary)
     .bind(...binds)
-    .first<{
-      id: number;
-      answer_quote_id: number;
-      movie_id: number;
-      band: DifficultyBand;
-      decoy_pool: string;
-    }>();
+    .first<RoundQueryRow>();
+
+  if (!row) {
+    const wrap = `${select} WHERE ${where} ORDER BY id LIMIT 1`;
+    row = await db
+      .prepare(wrap)
+      .bind(...binds)
+      .first<RoundQueryRow>();
+  }
 
   if (!row) return null;
   return {
@@ -91,6 +103,14 @@ async function queryRandomRound(db: D1Database, filters: RoundFilters): Promise<
     band: row.band,
     decoyPool: JSON.parse(row.decoy_pool) as DecoyCandidate[],
   };
+}
+
+interface RoundQueryRow {
+  id: number;
+  answer_quote_id: number;
+  movie_id: number;
+  band: DifficultyBand;
+  decoy_pool: string;
 }
 
 export async function getRoundById(db: D1Database, id: number): Promise<RoundRow | null> {

@@ -13,9 +13,11 @@ export async function parse(): Promise<void> {
   const byMovie: Record<number, DialogueBlock[]> = {};
   for (const script of scripts) {
     const raw = await readFile(resolve(SCRIPTS_DIR, `${script.movieId}.txt`), 'utf8');
-    const blocks = parseDialogue(raw);
+    // Transcripts are already dialogue-only; screenplays need cue/action parsing.
+    const blocks =
+      script.kind === 'transcript' ? [{ character: '', text: raw }] : parseDialogue(raw);
     byMovie[script.movieId] = blocks;
-    log.info(`movie ${script.movieId}: ${blocks.length} dialogue blocks`);
+    log.info(`movie ${script.movieId}: ${blocks.length} dialogue blocks (${script.kind})`);
   }
 
   await writeJson(resolve(DATA_DIR, 'dialogue.json'), byMovie);

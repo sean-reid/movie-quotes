@@ -1,32 +1,14 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import {
-  CACHE_DIR,
-  TMDB_BACKOFF_BASE_MS,
-  TMDB_MAX_RETRIES,
-  TMDB_REQUEST_INTERVAL_MS,
-  requireEnv,
-} from './config.js';
+import { CACHE_DIR, TMDB_BACKOFF_BASE_MS, TMDB_MAX_RETRIES, requireEnv } from './config.js';
+import { hostLimiter } from './util/limiter.js';
 import { log, sleep } from './util/log.js';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 const TMDB_CACHE = resolve(CACHE_DIR, 'tmdb');
-
-/** Serialize requests and keep a minimum gap between them. Deliberately gentle. */
-let lastRequestAt = 0;
-let chain: Promise<void> = Promise.resolve();
-
-async function throttle(): Promise<void> {
-  const release = chain;
-  let resolveNext!: () => void;
-  chain = new Promise<void>((r) => (resolveNext = r));
-  await release;
-  const wait = Math.max(0, lastRequestAt + TMDB_REQUEST_INTERVAL_MS - Date.now());
-  if (wait > 0) await sleep(wait);
-  lastRequestAt = Date.now();
-  resolveNext();
-}
+// TMDb tolerates high throughput; a modest concurrency keeps us fast and safe.
+const TMDB_CONCURRENCY = 8;
 
 function cacheKey(path: string, params: Record<string, string>): string {
   const query = new URLSearchParams(params).toString();
@@ -64,30 +46,33 @@ export async function tmdbGet<T>(path: string, params: Record<string, string> = 
     url.searchParams.set(k, v);
   }
 
-  for (let attempt = 0; attempt <= TMDB_MAX_RETRIES; attempt++) {
-    await throttle();
-    const response = await fetch(url, { headers: { accept: 'application/json' } });
+  return hostLimiter(
+    'api.themoviedb.org',
+    TMDB_CONCURRENCY,
+  )(async () => {
+    for (let attempt = 0; attempt <= TMDB_MAX_RETRIES; attempt++) {
+      const response = await fetch(url, { headers: { accept: 'application/json' } });
 
-    if (response.ok) {
-      const body = (await response.json()) as T;
-      await writeCache(key, body);
-      return body;
+      if (response.ok) {
+        const body = (await response.json()) as T;
+        await writeCache(key, body);
+        return body;
+      }
+
+      if (response.status === 429 || response.status >= 500) {
+        const retryAfter = Number(response.headers.get('retry-after'));
+        const backoff = Number.isFinite(retryAfter)
+          ? retryAfter * 1000
+          : TMDB_BACKOFF_BASE_MS * 2 ** attempt;
+        log.warn(`tmdb ${response.status} on ${path}, backing off ${backoff}ms`);
+        await sleep(backoff);
+        continue;
+      }
+
+      throw new Error(`TMDb request failed: ${response.status} ${path}`);
     }
-
-    if (response.status === 429 || response.status >= 500) {
-      const retryAfter = Number(response.headers.get('retry-after'));
-      const backoff = Number.isFinite(retryAfter)
-        ? retryAfter * 1000
-        : TMDB_BACKOFF_BASE_MS * 2 ** attempt;
-      log.warn(`tmdb ${response.status} on ${path}, backing off ${backoff}ms`);
-      await sleep(backoff);
-      continue;
-    }
-
-    throw new Error(`TMDb request failed: ${response.status} ${path}`);
-  }
-
-  throw new Error(`TMDb request exhausted retries: ${path}`);
+    throw new Error(`TMDb request exhausted retries: ${path}`);
+  });
 }
 
 export interface TmdbMovie {
