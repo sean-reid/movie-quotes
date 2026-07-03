@@ -57,7 +57,7 @@ export const DECOY_POOL_SIZE = 8;
  * exact-repeat rounds are very unlikely across games. Writes are cheap on the
  * Workers Paid plan; runtime selection uses a random-id lookup, not a full scan.
  */
-export const MAX_ROUNDS = 50000;
+export const MAX_ROUNDS = 150000;
 
 /**
  * Decoy hardness blends how similar the line reads (semantic) with how similar

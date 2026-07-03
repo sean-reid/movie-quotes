@@ -63,6 +63,7 @@ function roundsSql(pool: Round[]): string {
       'primary_genre_id',
       'band',
       'avg_similarity',
+      'rand',
       'decoy_pool',
     ],
     pool.map((r) => [
@@ -73,6 +74,7 @@ function roundsSql(pool: Round[]): string {
       r.primaryGenreId,
       r.band,
       r.avgSimilarity,
+      r.rand,
       JSON.stringify(r.decoyPool),
     ]),
   );

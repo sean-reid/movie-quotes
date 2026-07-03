@@ -56,9 +56,12 @@ CREATE TABLE rounds (
   primary_genre_id INTEGER,
   band             TEXT    NOT NULL,
   avg_similarity   REAL    NOT NULL,
+  rand             REAL    NOT NULL,
   decoy_pool       TEXT    NOT NULL
 );
 
 CREATE INDEX idx_quotes_movie ON quotes (movie_id);
 CREATE INDEX idx_movie_genres_movie ON movie_genres (movie_id);
-CREATE INDEX idx_rounds_filter ON rounds (band, decade, primary_genre_id);
+-- Uniform, index-seekable random selection: by band, and overall.
+CREATE INDEX idx_rounds_band_rand ON rounds (band, rand);
+CREATE INDEX idx_rounds_rand ON rounds (rand);

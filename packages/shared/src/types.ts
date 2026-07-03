@@ -42,6 +42,8 @@ export interface Round {
   primaryGenreId: number;
   band: DifficultyBand;
   avgSimilarity: number;
+  /** Random key in [0, 1) for uniform, index-seekable round selection. */
+  rand: number;
   decoyPool: DecoyCandidate[];
 }
 

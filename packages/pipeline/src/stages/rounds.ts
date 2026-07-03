@@ -92,6 +92,7 @@ export async function rounds(): Promise<void> {
       primaryGenreId: answerMovie.genreIds[0] ?? 0,
       band: 'easy', // assigned by percentile below
       avgSimilarity,
+      rand: Math.random(),
       decoyPool,
     });
   }
