@@ -11,7 +11,15 @@ import {
   type RoundView,
 } from '@movie-quotes/shared';
 import type { Env } from './env.js';
-import { getMovie, getMovies, getMeta, getQuotes, getRoundById, selectRandomRound } from './db.js';
+import {
+  getMovie,
+  getMovies,
+  getMeta,
+  getQuotes,
+  getRoundById,
+  selectRandomRound,
+  type RoundRow,
+} from './db.js';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,6 +37,41 @@ function parseIntList(value: string | undefined): number[] {
     .split(',')
     .map((v) => Number(v))
     .filter((n) => Number.isInteger(n));
+}
+
+/** Build the client-facing view of a round (answer hidden, choices shuffled deterministically). */
+async function assembleView(env: Env, round: RoundRow): Promise<RoundView | null> {
+  const decoyIds = round.decoyPool.slice(0, DEFAULT_CHOICE_COUNT - 1).map((d) => d.quoteId);
+  const quotes = await getQuotes(env.DB, [round.answerQuoteId, ...decoyIds]);
+  const answer = quotes.get(round.answerQuoteId);
+  const movie = await getMovie(env.DB, round.movieId);
+  if (!answer || !movie) return null;
+
+  const decoys = decoyIds
+    .map((id) => quotes.get(id))
+    .filter((q): q is NonNullable<typeof q> => q !== undefined)
+    .map((q) => ({ quoteId: q.id, text: q.text }));
+
+  try {
+    const assembled = selectChoices({
+      answer: { quoteId: answer.id, text: answer.text },
+      decoys,
+      choiceCount: DEFAULT_CHOICE_COUNT,
+      rng: mulberry32(round.id),
+    });
+    const choices: Choice[] = assembled.choices.map((ch) => ({
+      choiceId: ch.quoteId,
+      text: ch.text,
+    }));
+    return {
+      roundId: round.id,
+      band: round.band,
+      film: { id: movie.id, title: movie.title, year: movie.year },
+      choices,
+    };
+  } catch {
+    return null;
+  }
 }
 
 app.use('/api/*', async (c, next) => {
@@ -60,38 +103,21 @@ app.get('/api/round', async (c) => {
     excludeRounds: parseIntList(c.req.query('excludeRounds')),
     excludeMovies: parseIntList(c.req.query('excludeMovies')),
   });
-
   if (!round) return c.json({ error: 'no matching round' }, 404);
 
-  const decoyIds = round.decoyPool.slice(0, DEFAULT_CHOICE_COUNT - 1).map((d) => d.quoteId);
-  const quotes = await getQuotes(c.env.DB, [round.answerQuoteId, ...decoyIds]);
-  const answer = quotes.get(round.answerQuoteId);
-  const movie = await getMovie(c.env.DB, round.movieId);
-  if (!answer || !movie) return c.json({ error: 'round data missing' }, 500);
+  const view = await assembleView(c.env, round);
+  if (!view) return c.json({ error: 'round data missing' }, 500);
+  return c.json(view);
+});
 
-  const decoys = decoyIds
-    .map((id) => quotes.get(id))
-    .filter((q): q is NonNullable<typeof q> => q !== undefined)
-    .map((q) => ({ quoteId: q.id, text: q.text }));
-
-  const assembled = selectChoices({
-    answer: { quoteId: answer.id, text: answer.text },
-    decoys,
-    choiceCount: DEFAULT_CHOICE_COUNT,
-    rng: mulberry32(round.id),
-  });
-
-  const choices: Choice[] = assembled.choices.map((ch) => ({
-    choiceId: ch.quoteId,
-    text: ch.text,
-  }));
-
-  const view: RoundView = {
-    roundId: round.id,
-    band: round.band,
-    film: { id: movie.id, title: movie.title, year: movie.year },
-    choices,
-  };
+// Fetch a specific round by id, used to replay a shared challenge.
+app.get('/api/round/:id', async (c) => {
+  const id = parseIntParam(c.req.param('id'));
+  if (id === undefined) return c.json({ error: 'invalid round id' }, 400);
+  const round = await getRoundById(c.env.DB, id);
+  if (!round) return c.json({ error: 'round not found' }, 404);
+  const view = await assembleView(c.env, round);
+  if (!view) return c.json({ error: 'round data missing' }, 500);
   return c.json(view);
 });
 

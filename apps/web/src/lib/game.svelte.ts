@@ -4,7 +4,7 @@ import {
   type GuessResult,
   type RoundView,
 } from '@movie-quotes/shared';
-import { fetchRound, submitGuess } from './api';
+import { fetchRound, fetchRoundById, submitGuess } from './api';
 import { recordGame } from './stats';
 
 export const TOTAL_ROUNDS = 10;
@@ -12,8 +12,8 @@ export const TOTAL_ROUNDS = 10;
 export type Phase = 'idle' | 'loading' | 'question' | 'reveal' | 'done' | 'error';
 
 export interface GameConfig {
-  genre?: number;
-  decade?: number;
+  /** When set, replay this exact sequence of rounds (a shared challenge). */
+  roundIds?: number[];
 }
 
 export interface RoundOutcome {
@@ -22,7 +22,7 @@ export interface RoundOutcome {
 
 export class Game {
   phase = $state<Phase>('idle');
-  roundNumber = $state(0); // 1-based, for display
+  roundNumber = $state(0); // rounds served so far (1-based once playing)
   score = $state(0);
   streak = $state(0);
   bestStreak = $state(0);
@@ -31,15 +31,27 @@ export class Game {
   selectedChoiceId = $state<number | null>(null);
   results = $state<RoundOutcome[]>([]);
   error = $state<string | null>(null);
+  /** Round ids served this game, in order, for building a shareable challenge link. */
+  playedRoundIds = $state<number[]>([]);
 
-  private config: GameConfig;
+  private readonly challengeIds: number[] | null;
   private band: DifficultyBand = 'easy';
   private seenRounds: number[] = [];
   private seenMovies: number[] = [];
   private askedAt = 0;
+  private prefetch: Promise<RoundView | null> | null = null;
 
   constructor(config: GameConfig = {}) {
-    this.config = config;
+    const ids = config.roundIds?.slice(0, TOTAL_ROUNDS);
+    this.challengeIds = ids && ids.length > 0 ? ids : null;
+  }
+
+  get total(): number {
+    return this.challengeIds ? this.challengeIds.length : TOTAL_ROUNDS;
+  }
+
+  get correctCount(): number {
+    return this.results.filter((r) => r.correct).length;
   }
 
   async start(): Promise<void> {
@@ -49,11 +61,32 @@ export class Game {
     this.streak = 0;
     this.bestStreak = 0;
     this.results = [];
+    this.playedRoundIds = [];
     this.error = null;
     this.band = 'easy';
     this.seenRounds = [];
     this.seenMovies = [];
+    this.prefetch = null;
     await this.loadNext();
+  }
+
+  /** Fetch the next round based on mode; does not mutate game state. */
+  private fetchNext(): Promise<RoundView | null> {
+    if (this.challengeIds) {
+      const id = this.challengeIds[this.roundNumber];
+      return id === undefined ? Promise.resolve(null) : fetchRoundById(id);
+    }
+    return fetchRound({
+      band: this.band,
+      excludeRounds: this.seenRounds,
+      excludeMovies: this.seenMovies,
+    }).then(
+      (r) =>
+        r ??
+        fetchRound({ band: this.band, excludeRounds: this.seenRounds }).then(
+          (r2) => r2 ?? fetchRound({ excludeRounds: this.seenRounds }),
+        ),
+    );
   }
 
   private async loadNext(): Promise<void> {
@@ -61,36 +94,38 @@ export class Game {
     this.guess = null;
     this.selectedChoiceId = null;
     try {
-      const round = await this.fetchWithRelaxation();
+      let round: RoundView | null;
+      if (this.prefetch) {
+        try {
+          round = await this.prefetch;
+        } catch {
+          round = await this.fetchNext();
+        }
+        this.prefetch = null;
+      } else {
+        round = await this.fetchNext();
+      }
       if (!round) {
-        // Nothing left to serve; end the game with what we have.
         this.finish();
         return;
       }
-      this.view = round;
-      this.seenRounds.push(round.roundId);
-      this.seenMovies.push(round.film.id);
-      this.roundNumber += 1;
-      this.askedAt = performance.now();
-      this.phase = 'question';
+      this.serveRound(round);
     } catch {
       this.error = 'Could not load the next round. Check your connection and try again.';
       this.phase = 'error';
     }
   }
 
-  /** Try progressively looser queries so a small or filtered corpus never dead-ends. */
-  private async fetchWithRelaxation(): Promise<RoundView | null> {
-    const base = {
-      genre: this.config.genre,
-      decade: this.config.decade,
-      excludeRounds: this.seenRounds,
-    };
-    return (
-      (await fetchRound({ ...base, band: this.band, excludeMovies: this.seenMovies })) ??
-      (await fetchRound({ ...base, band: this.band })) ??
-      (await fetchRound(base))
-    );
+  private serveRound(round: RoundView): void {
+    this.view = round;
+    this.playedRoundIds = [...this.playedRoundIds, round.roundId];
+    this.seenRounds.push(round.roundId);
+    this.seenMovies.push(round.film.id);
+    this.roundNumber += 1;
+    this.guess = null;
+    this.selectedChoiceId = null;
+    this.askedAt = performance.now();
+    this.phase = 'question';
   }
 
   async choose(choiceId: number): Promise<void> {
@@ -109,6 +144,10 @@ export class Game {
       this.streak = result.correct ? this.streak + 1 : 0;
       this.bestStreak = Math.max(this.bestStreak, this.streak);
       this.results = [...this.results, { correct: result.correct }];
+      // Advance difficulty and prefetch the next round while the player reads
+      // the reveal, so advancing is instant.
+      this.band = nextBand(this.band, result.correct);
+      this.prefetch = this.roundNumber < this.total ? this.fetchNext() : null;
     } catch {
       this.error = 'Could not score that guess. Check your connection and try again.';
       this.phase = 'error';
@@ -117,9 +156,7 @@ export class Game {
 
   async next(): Promise<void> {
     if (this.phase !== 'reveal') return;
-    const lastCorrect = this.guess?.correct ?? false;
-    this.band = nextBand(this.band, lastCorrect);
-    if (this.roundNumber >= TOTAL_ROUNDS) {
+    if (this.roundNumber >= this.total) {
       this.finish();
     } else {
       await this.loadNext();
@@ -128,16 +165,11 @@ export class Game {
 
   private finish(): void {
     this.phase = 'done';
-    const correct = this.results.filter((r) => r.correct).length;
     recordGame({
       score: this.score,
-      correct,
+      correct: this.correctCount,
       rounds: this.results.length,
       bestStreak: this.bestStreak,
     });
-  }
-
-  get correctCount(): number {
-    return this.results.filter((r) => r.correct).length;
   }
 }

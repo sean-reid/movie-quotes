@@ -47,6 +47,14 @@ export async function fetchRound(query: RoundQuery): Promise<RoundView | null> {
   return res.json() as Promise<RoundView>;
 }
 
+/** Fetch a specific round by id (for replaying a shared challenge). Null if not found. */
+export async function fetchRoundById(id: number): Promise<RoundView | null> {
+  const res = await fetch(`${API_BASE}/api/round/${id}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`round request failed: ${res.status}`);
+  return res.json() as Promise<RoundView>;
+}
+
 export async function submitGuess(roundId: number, body: GuessBody): Promise<GuessResult> {
   const res = await fetch(`${API_BASE}/api/round/${roundId}/guess`, {
     method: 'POST',

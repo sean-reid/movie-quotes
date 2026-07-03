@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
-  import { Game, TOTAL_ROUNDS } from '$lib/game.svelte';
+  import { Game } from '$lib/game.svelte';
   import { buildShareText } from '$lib/share';
   import { loadStats } from '$lib/stats';
   import ProgressDots from '$lib/components/ProgressDots.svelte';
@@ -11,12 +11,12 @@
 
   onMount(() => {
     const sp = $page.url.searchParams;
-    const genre = sp.get('genre');
-    const decade = sp.get('decade');
-    const instance = new Game({
-      genre: genre ? Number(genre) : undefined,
-      decade: decade ? Number(decade) : undefined,
-    });
+    // `c` carries a shared challenge: a comma-separated list of round ids to replay.
+    const roundIds = (sp.get('c') ?? '')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    const instance = new Game(roundIds.length ? { roundIds } : {});
     game = instance;
     void instance.start();
   });
@@ -56,7 +56,8 @@
 
   async function share() {
     if (!game) return;
-    const text = buildShareText(game.score, game.results);
+    const url = `${location.origin}/play?c=${game.playedRoundIds.join(',')}`;
+    const text = buildShareText(game.score, game.results, url);
     try {
       await navigator.clipboard.writeText(text);
       copied = true;
@@ -86,10 +87,10 @@
       <p class="eyebrow">Game over</p>
       <h1 data-testid="final-score">{game.score} points</h1>
       <p class="summary">
-        You matched <strong>{game.correctCount}</strong> of {TOTAL_ROUNDS} lines · best streak
+        You matched <strong>{game.correctCount}</strong> of {game.total} lines · best streak
         {game.bestStreak}
       </p>
-      <ProgressDots results={game.results} total={TOTAL_ROUNDS} />
+      <ProgressDots results={game.results} total={game.total} />
 
       {#if stats}
         <p class="best">Best score {stats.bestScore} · {stats.gamesPlayed} games played</p>
@@ -102,14 +103,14 @@
         <button class="secondary" onclick={() => game?.start()} data-testid="play-again">
           Play again
         </button>
-        <a class="link" href="/">Change filters</a>
+        <a class="link" href="/">Back to home</a>
       </div>
     </section>
   {:else if game.view}
     <section class="round">
       <div class="topbar">
-        <span class="counter">Round {game.roundNumber} / {TOTAL_ROUNDS}</span>
-        <ProgressDots results={game.results} total={TOTAL_ROUNDS} />
+        <span class="counter">Round {game.roundNumber} / {game.total}</span>
+        <ProgressDots results={game.results} total={game.total} />
         <span class="score" data-testid="score">{game.score}</span>
       </div>
 
@@ -164,7 +165,7 @@
                 </div>
               </div>
               <button class="primary next" onclick={() => game?.next()} data-testid="next-button">
-                {game.roundNumber >= TOTAL_ROUNDS ? 'See results' : 'Next round'}
+                {game.roundNumber >= game.total ? 'See results' : 'Next round'}
               </button>
             </div>
           {:else}
