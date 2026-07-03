@@ -8,15 +8,17 @@ export const MIN_QUOTE_WORDS = 4;
 // capitalized words then a colon).
 const SPEAKER_LABEL = /^[A-Z][A-Za-z'.]*(?:\s+[A-Z][A-Za-z'.]*){0,2}:\s+/;
 
-// First/second person pronouns and contractions are strong signals of spoken
-// dialogue; third-person scene description ("He walks to the door") has none.
+// First/second person pronouns are strong signals of spoken dialogue;
+// third-person scene description ("He walks to the door") has none.
 const DIALOGUE_SIGNAL =
   /\b(i|i'm|i'll|i've|i'd|you|you're|you'll|you've|you'd|we|we're|we'll|we've|me|my|your|us|our|mine|yours|let's)\b/i;
-const CONTRACTION = /\b\w+'(t|s|re|ll|ve|d|m)\b/i;
+// Verb contractions (not bare possessives like "father's", which appear in narration).
+const VERB_CONTRACTION =
+  /\b(\w+n't|\w+'(m|re|ve|ll|d)|it's|that's|he's|she's|there's|here's|what's|who's|how's|where's)\b/i;
 
 /** True when a line reads like something a character says, not narration. */
 export function isLikelyDialogue(text: string): boolean {
-  return DIALOGUE_SIGNAL.test(text) || CONTRACTION.test(text) || /[?!]/.test(text);
+  return DIALOGUE_SIGNAL.test(text) || VERB_CONTRACTION.test(text) || /[?!]/.test(text);
 }
 
 /** Split a dialogue block into sentence-sized candidate lines. */

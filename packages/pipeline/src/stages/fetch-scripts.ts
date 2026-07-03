@@ -2,7 +2,7 @@ import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DATA_DIR, SCRIPTS_DIR } from '../config.js';
 import type { MovieRecord, ScriptRecord } from '../types.js';
-import { imsdbSource, springfieldSource, type Source } from '../sources.js';
+import { springfieldSource, type Source } from '../sources.js';
 import { readJson, writeJson } from '../util/fs.js';
 import { log } from '../util/log.js';
 
@@ -65,9 +65,9 @@ export async function fetchScripts(): Promise<void> {
   const done = new Set([...attempted, ...scripts.map((s) => s.movieId)]);
   if (done.size > 0) log.info(`resuming: ${scripts.length} found, ${done.size} attempted`);
 
-  // Springfield first: dialogue-only transcripts (cleaner) with far wider coverage;
-  // IMSDb screenplays as a fallback for films Springfield lacks.
-  const sources: Source[] = [springfieldSource(), imsdbSource()];
+  // Springfield only: dialogue-only transcripts. Screenplay sources leak scene
+  // description/action lines, so we do not use them.
+  const sources: Source[] = [springfieldSource()];
   for (const source of sources) await source.init();
 
   // Optional per-run batch size (this pipeline is resumable), default: everything.
