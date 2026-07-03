@@ -78,7 +78,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy web to Pages
-        run: pnpm --filter @movie-quotes/web exec wrangler pages deploy .svelte-kit/cloudflare --project-name movie-quotes
+        run: pnpm --filter @movie-quotes/web exec wrangler pages deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
