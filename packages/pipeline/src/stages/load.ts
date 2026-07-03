@@ -110,13 +110,12 @@ export async function load(): Promise<void> {
     const fixtureMovieIds = new Set(fixtureMovies.map((m) => m.id));
     const fixtureQuotes = quotes.filter((q) => fixtureMovieIds.has(q.movieId));
     const fixtureQuoteIds = new Set(fixtureQuotes.map((q) => q.id));
-    // Keep only rounds that are fully playable within the subset.
-    const fixtureRounds = pool.filter(
-      (r) =>
-        fixtureMovieIds.has(r.movieId) &&
-        fixtureQuoteIds.has(r.answerQuoteId) &&
-        r.decoyPool.filter((d) => fixtureQuoteIds.has(d.quoteId)).length >= 2,
-    );
+    // Keep only rounds that are fully playable within the subset. Trim each
+    // decoy pool to in-subset quotes so the API's top-of-pool picks always exist.
+    const fixtureRounds = pool
+      .filter((r) => fixtureMovieIds.has(r.movieId) && fixtureQuoteIds.has(r.answerQuoteId))
+      .map((r) => ({ ...r, decoyPool: r.decoyPool.filter((d) => fixtureQuoteIds.has(d.quoteId)) }))
+      .filter((r) => r.decoyPool.length >= 2);
     const fixture =
       header +
       genresSql(genres) +
