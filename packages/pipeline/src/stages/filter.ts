@@ -6,7 +6,7 @@ import { extractQuotes } from '../util/quotes.js';
 import { readJson, writeJson } from '../util/fs.js';
 import { log } from '../util/log.js';
 
-const MAX_QUOTES_PER_MOVIE = 80;
+const MAX_QUOTES_PER_MOVIE = 50;
 
 export async function filter(): Promise<void> {
   log.step('filter: select candidate quotes');

@@ -6,7 +6,13 @@ import {
   type DecoyCandidate,
   type Round,
 } from '@movie-quotes/shared';
-import { DATA_DIR, DECOY_MOVIE_WEIGHT, DECOY_POOL_SIZE, DECOY_SEMANTIC_WEIGHT } from '../config.js';
+import {
+  DATA_DIR,
+  DECOY_MOVIE_WEIGHT,
+  DECOY_POOL_SIZE,
+  DECOY_SEMANTIC_WEIGHT,
+  MAX_ROUNDS,
+} from '../config.js';
 import type { MovieRecord, QuoteRecord } from '../types.js';
 import { movieSimilarity } from '../util/movie-sim.js';
 import type { Neighbor } from './neighbors.js';
@@ -80,12 +86,23 @@ export async function rounds(): Promise<void> {
     });
   }
 
-  await writeJson(resolve(DATA_DIR, 'rounds.json'), pool);
-  const bands = pool.reduce<Record<string, number>>((acc, r) => {
+  // Cap the pool (even sample to keep the era/genre/difficulty spread) so the D1
+  // seed stays well under the free-tier write limit.
+  let finalPool = pool;
+  if (pool.length > MAX_ROUNDS) {
+    const step = pool.length / MAX_ROUNDS;
+    finalPool = Array.from({ length: MAX_ROUNDS }, (_, i) => pool[Math.floor(i * step)]!);
+    log.info(`capping rounds ${pool.length} -> ${finalPool.length}`);
+  }
+
+  await writeJson(resolve(DATA_DIR, 'rounds.json'), finalPool);
+  const bands = finalPool.reduce<Record<string, number>>((acc, r) => {
     acc[r.band] = (acc[r.band] ?? 0) + 1;
     return acc;
   }, {});
-  log.info(`rounds complete: ${pool.length} rounds (${JSON.stringify(bands)}), ${skipped} skipped`);
+  log.info(
+    `rounds complete: ${finalPool.length} rounds (${JSON.stringify(bands)}), ${skipped} skipped`,
+  );
 }
 
 rounds().catch((error) => {

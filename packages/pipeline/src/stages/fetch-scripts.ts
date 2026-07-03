@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { DATA_DIR, SCRIPTS_DIR } from '../config.js';
 import type { MovieRecord, ScriptRecord } from '../types.js';
@@ -62,16 +62,45 @@ async function fetchScript(entry: IndexEntry): Promise<string | null> {
   return text.length >= MIN_SCRIPT_CHARS ? text : null;
 }
 
+/**
+ * Resume support: the saved script files on disk are the source of truth, so a
+ * run interrupted before scripts.json was written still resumes cleanly.
+ */
+async function loadProgress(): Promise<ScriptRecord[]> {
+  let files: string[] = [];
+  try {
+    files = await readdir(SCRIPTS_DIR);
+  } catch {
+    return [];
+  }
+  const records: ScriptRecord[] = [];
+  for (const file of files) {
+    if (!file.endsWith('.txt')) continue;
+    const movieId = Number(file.replace('.txt', ''));
+    if (!Number.isInteger(movieId)) continue;
+    const { size } = await stat(resolve(SCRIPTS_DIR, file));
+    records.push({ movieId, source: 'imsdb', r2Key: `raw/${movieId}.txt`, chars: size });
+  }
+  return records;
+}
+
 export async function fetchScripts(): Promise<void> {
   log.step('fetch-scripts: locate and download screenplays');
   const movies = await readJson<MovieRecord[]>(resolve(DATA_DIR, 'movies.json'));
-  const index = await loadIndex();
   await mkdir(SCRIPTS_DIR, { recursive: true });
 
-  const scripts: ScriptRecord[] = [];
+  // Resume: keep films already downloaded, skip them, and re-attempt the rest.
+  // The HTTP cache means re-attempts never re-download pages we already fetched.
+  const scripts = await loadProgress();
+  const done = new Set(scripts.map((s) => s.movieId));
+  if (done.size > 0) log.info(`resuming: ${done.size} scripts already saved`);
+
+  const index = await loadIndex();
   let misses = 0;
 
   for (const movie of movies) {
+    if (done.has(movie.id)) continue;
+
     const entry = lookup(index, movie.title);
     if (!entry) {
       misses++;
@@ -91,7 +120,10 @@ export async function fetchScripts(): Promise<void> {
       r2Key: `raw/${movie.id}.txt`,
       chars: text.length,
     });
-    log.info(`saved ${movie.title} (${text.length} chars)`);
+    done.add(movie.id);
+    // Persist after each save so an interrupted run resumes cleanly.
+    await writeJson(resolve(DATA_DIR, 'scripts.json'), scripts);
+    log.info(`saved ${movie.title} (${text.length} chars, ${scripts.length} total)`);
   }
 
   await writeJson(resolve(DATA_DIR, 'scripts.json'), scripts);

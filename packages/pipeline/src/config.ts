@@ -19,14 +19,14 @@ export const MIN_RATING = 6.5;
  * (about 17%) so the corpus is not all recent releases.
  */
 export const DECADE_QUOTAS: Record<number, number> = {
-  1950: 30,
-  1960: 40,
-  1970: 60,
-  1980: 100,
-  1990: 130,
-  2000: 140,
-  2010: 160,
-  2020: 90,
+  1950: 40,
+  1960: 55,
+  1970: 80,
+  1980: 130,
+  1990: 175,
+  2000: 185,
+  2010: 210,
+  2020: 125,
 };
 
 /**
@@ -46,6 +46,12 @@ export const NEIGHBORS_TOP_N = 20;
 
 /** How many ranked decoys to keep per round, so answer size can grow later. */
 export const DECOY_POOL_SIZE = 8;
+
+/**
+ * Cap on the pre-generated round pool. Keeps the D1 seed well under the free-tier
+ * daily write limit while still offering far more variety than anyone will play.
+ */
+export const MAX_ROUNDS = 20000;
 
 /**
  * Decoy hardness blends how similar the line reads (semantic) with how similar
