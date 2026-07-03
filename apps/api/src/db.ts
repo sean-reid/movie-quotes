@@ -71,29 +71,20 @@ function filterClauses(filters: RoundFilters): { sql: string; binds: unknown[] }
 }
 
 /**
- * Pick a random matching round via a random-id seek instead of ORDER BY RANDOM(),
- * so it stays an O(log n) index lookup even with a very large rounds table. Picks
- * a random id, takes the next matching row at or after it, and wraps to the start
- * if the random point overshoots.
+ * Pick a random matching round with ORDER BY RANDOM(). A random-id seek was
+ * biased under band filters (band rounds cluster by movie in id-space, so only a
+ * handful of films surfaced per band); a true random sort is uniform and, at a
+ * 50k-round pool, still only a few ms per query.
  */
 async function queryRandomRound(db: D1Database, filters: RoundFilters): Promise<RoundRow | null> {
   const { sql: where, binds } = filterClauses(filters);
-  const select = 'SELECT id, answer_quote_id, movie_id, band, decoy_pool FROM rounds';
-  const pivot = 'id >= (ABS(RANDOM()) % (SELECT MAX(id) + 1 FROM rounds))';
-
-  const primary = `${select} WHERE ${pivot} AND ${where} ORDER BY id LIMIT 1`;
-  let row = await db
-    .prepare(primary)
+  const row = await db
+    .prepare(
+      `SELECT id, answer_quote_id, movie_id, band, decoy_pool
+       FROM rounds WHERE ${where} ORDER BY RANDOM() LIMIT 1`,
+    )
     .bind(...binds)
     .first<RoundQueryRow>();
-
-  if (!row) {
-    const wrap = `${select} WHERE ${where} ORDER BY id LIMIT 1`;
-    row = await db
-      .prepare(wrap)
-      .bind(...binds)
-      .first<RoundQueryRow>();
-  }
 
   if (!row) return null;
   return {
