@@ -21,30 +21,43 @@ export function isLikelyDialogue(text: string): boolean {
   return DIALOGUE_SIGNAL.test(text) || VERB_CONTRACTION.test(text) || /[?!]/.test(text);
 }
 
-/** Split a dialogue block into sentence-sized candidate lines. */
-export function splitSentences(text: string): string[] {
-  // Final normalization applied to every source: drop bracketed annotations and
-  // repair the "l"/"I" subtitle confusion, including cases that spanned fragments.
-  const cleaned = text
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/[[\]]/g, ' ')
-    .replace(/([a-z])"([a-z])/g, "$1'$2") // mis-rendered apostrophe: it"s -> it's
+/**
+ * Normalize a single candidate line: strip stage directions (brackets and
+ * parentheticals, including orphaned halves from subtitle line breaks), drop
+ * leading speaker labels, and repair subtitle OCR ("l"/"I", it"s -> it's).
+ */
+export function cleanQuoteText(s: string): string {
+  return s
+    .replace(/\[[^\]]*\]/g, ' ') // [sound/speaker]
+    .replace(/\([^)]*\)/g, ' ') // (stage direction)
+    .replace(/[^)]*\)/g, ' ') // orphaned "GROANING)" from a lost "("
+    .replace(/\([^)]*$/, ' ') // orphaned trailing "(cheering"
+    .replace(/[()|@]+/g, ' ')
+    .replace(/([a-z])"([a-z])/g, "$1'$2") // it"s -> it's
     .replace(/\bl'(m|ll|ve|d|re|s)\b/g, "I'$1")
     .replace(/\bl\b/g, 'I')
-    // Capital I after a lowercase letter is OCR for l (wiII -> will); two passes
-    // handle consecutive I's.
+    .replace(/([a-z])I/g, '$1l') // wiII -> will (two passes for consecutive)
     .replace(/([a-z])I/g, '$1l')
-    .replace(/([a-z])I/g, '$1l')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^["'“”]+|["'“”]+$/g, '')
+    .replace(/^[^\p{L}\p{N}"'¿¡]+/u, '') // leading junk before real text
+    .replace(SPEAKER_LABEL, '')
+    .replace(/^[^\p{L}\p{N}"'¿¡]+/u, '')
+    .trim();
+}
+
+/** Split a dialogue block into normalized sentence-sized candidate lines. */
+export function splitSentences(text: string): string[] {
+  // Strip enclosures on the whole block first so a period inside a parenthetical
+  // does not cause a bad sentence split.
+  const pre = text
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
     .replace(/\s+/g, ' ');
-  return cleaned
+  return pre
     .split(/(?<=[.!?]["'”’]?)\s+/)
-    .map((s) =>
-      s
-        .trim()
-        .replace(/^["'“”]+|["'“”]+$/g, '')
-        .replace(SPEAKER_LABEL, '')
-        .trim(),
-    )
+    .map(cleanQuoteText)
     .filter((s) => s.length > 0);
 }
 

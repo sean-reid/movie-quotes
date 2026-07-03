@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { isGoodQuote, isLikelyDialogue, splitSentences } from '../src/util/quotes.js';
+import {
+  cleanQuoteText,
+  isGoodQuote,
+  isLikelyDialogue,
+  splitSentences,
+} from '../src/util/quotes.js';
+
+describe('cleanQuoteText', () => {
+  it('strips leading stage directions (balanced and orphaned parens)', () => {
+    expect(cleanQuoteText('(GROANING) What are you doing?')).toBe('What are you doing?');
+    expect(cleanQuoteText('Fitch) You are no longer black!')).toBe('You are no longer black!');
+    expect(cleanQuoteText('TV news continues ) If it fell from a plane?')).toBe(
+      'If it fell from a plane?',
+    );
+  });
+
+  it('strips leading speaker labels', () => {
+    expect(cleanQuoteText('RONALD: Beer is all I need.')).toBe('Beer is all I need.');
+  });
+});
 
 describe('isLikelyDialogue', () => {
   it('accepts lines with first/second person or contractions or ?!', () => {

@@ -15,7 +15,8 @@
     "embed": "node --import tsx src/stages/embed.ts",
     "neighbors": "node --import tsx src/stages/neighbors.ts",
     "rounds": "node --import tsx src/stages/rounds.ts",
-    "load": "node --import tsx src/stages/load.ts"
+    "load": "node --import tsx src/stages/load.ts",
+    "patch-quotes": "node --import tsx src/stages/patch-quotes.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
