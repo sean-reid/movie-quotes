@@ -11,7 +11,7 @@
     // Public TMDb image CDN base for poster URLs (safe to expose).
     "TMDB_IMAGE_BASE": "https://image.tmdb.org/t/p/w500",
     // Comma-separated list of allowed browser origins for CORS.
-    "ALLOWED_ORIGINS": "http://localhost:5173,https://movie-quotes.pages.dev,https://quotes.dwainosaur.com,https://quotes.seanre.id",
+    "ALLOWED_ORIGINS": "http://localhost:5173,https://quotes.seanre.id",
   },
   "d1_databases": [
     {
